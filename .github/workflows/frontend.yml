@@ -17,6 +17,8 @@ jobs:
       ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
       ENV: ${{ github.event.inputs.environment }}
       S3_BUCKET: myapp-frontend-${{ github.event.inputs.environment }}-${{ vars.ACCOUNT_ID }}
+      AWS_REGION: ap-south-1
+
 
     steps:
       - name: Checkout Code
