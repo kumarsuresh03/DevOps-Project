@@ -22,6 +22,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # 🔹 Select correct CloudFront distribution
       - name: Set CloudFront Distribution ID
         run: |
           if [ "${ENV}" = "dev" ]; then
@@ -32,6 +33,7 @@ jobs:
             echo "DISTRIBUTION_ID=${{ vars.CLOUDFRONT_PROD_ID }}" >> $GITHUB_ENV
           fi
 
+      # 🔹 Configure AWS
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -39,25 +41,30 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
 
+      # 🔹 Setup Node
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
+      # 🔹 Install dependencies
       - name: Install Dependencies
         run: |
           cd frontend
           npm install
 
+      # 🔹 Build (NO export command needed)
       - name: Build Static Site
         run: |
           cd frontend
           npm run build
 
+      # 🔹 Upload to S3
       - name: Upload to S3
         run: |
           aws s3 sync frontend/out/ s3://$S3_BUCKET --delete
 
+      # 🔹 Invalidate CloudFront
       - name: Invalidate CloudFront Cache
         run: |
           aws cloudfront create-invalidation \
