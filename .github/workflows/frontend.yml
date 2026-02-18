@@ -27,10 +27,13 @@ jobs:
         run: |
           if [ "${ENV}" = "dev" ]; then
             echo "DISTRIBUTION_ID=${{ vars.CLOUDFRONT_DEV_ID }}" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_API_URL=${{ vars.FRONTEND_DEV_API_URL }}" >> $GITHUB_ENV
           elif [ "${ENV}" = "stage" ]; then
             echo "DISTRIBUTION_ID=${{ vars.CLOUDFRONT_STAGE_ID }}" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_API_URL=${{ vars.FRONTEND_STAGE_API_URL }}" >> $GITHUB_ENV
           elif [ "${ENV}" = "prod" ]; then
             echo "DISTRIBUTION_ID=${{ vars.CLOUDFRONT_PROD_ID }}" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_API_URL=${{ vars.FRONTEND_PROD_API_URL }}" >> $GITHUB_ENV
           fi
 
       # 🔹 Configure AWS
@@ -53,7 +56,7 @@ jobs:
           cd frontend
           npm install
 
-      # 🔹 Build (NO export command needed)
+      # 🔹 Build Static Site
       - name: Build Static Site
         run: |
           cd frontend
