@@ -1,0 +1,46 @@
+name: Backend Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment (dev/stage/prod)"
+        required: true
+        default: "dev"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ap-south-1
+      ACCOUNT_ID: 375864262524
+      ECR_REPO: backend-${{ github.event.inputs.environment }}
+      ECS_CLUSTER: shared-ecs-cluster
+      ECS_SERVICE: backend-${{ github.event.inputs.environment }}-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build and Push Docker Image
+        run: |
+          IMAGE_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest
+          aws ecr get-login-password --region $AWS_REGION \
+          | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+
+          docker build -t $ECR_REPO ./backend
+          docker tag $ECR_REPO:latest $IMAGE_URI
+          docker push $IMAGE_URI
+
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_SERVICE \
+            --force-new-deployment
