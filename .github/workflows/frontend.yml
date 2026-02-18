@@ -11,6 +11,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
 
     env:
       AWS_REGION: ap-south-1
@@ -19,11 +20,12 @@ jobs:
       S3_BUCKET: myapp-frontend-${{ github.event.inputs.environment }}-375864262524
 
     steps:
+      # 🔹 Checkout Code
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 🔹 Select correct CloudFront distribution
-      - name: Set CloudFront Distribution ID
+      # 🔹 Select Environment Variables Dynamically
+      - name: Set Environment Variables
         run: |
           if [ "${ENV}" = "dev" ]; then
             echo "DISTRIBUTION_ID=${{ vars.CLOUDFRONT_DEV_ID }}" >> $GITHUB_ENV
@@ -36,13 +38,13 @@ jobs:
             echo "NEXT_PUBLIC_API_URL=${{ vars.FRONTEND_PROD_API_URL }}" >> $GITHUB_ENV
           fi
 
-      # 🔹 Configure AWS
+      # 🔹 Configure AWS Credentials
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-south-1
+          aws-region: ${{ env.AWS_REGION }}
 
       # 🔹 Setup Node
       - name: Setup Node.js
@@ -50,16 +52,17 @@ jobs:
         with:
           node-version: 18
 
-      # 🔹 Install dependencies
+      # 🔹 Install Dependencies
       - name: Install Dependencies
         run: |
           cd frontend
           npm install
 
-      # 🔹 Build Static Site
+      # 🔹 Build Static Site (CRITICAL FIX)
       - name: Build Static Site
         run: |
           cd frontend
+          echo "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL" > .env.production
           npm run build
 
       # 🔹 Upload to S3
@@ -67,7 +70,7 @@ jobs:
         run: |
           aws s3 sync frontend/out/ s3://$S3_BUCKET --delete
 
-      # 🔹 Invalidate CloudFront
+      # 🔹 Invalidate CloudFront Cache
       - name: Invalidate CloudFront Cache
         run: |
           aws cloudfront create-invalidation \
