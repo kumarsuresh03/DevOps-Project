@@ -1,0 +1,28 @@
+name: GCP OIDC Test
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  test-auth:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: "projects/393888714848/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+          service_account: "terraform-sa@dev-stage-project.iam.gserviceaccount.com"
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Verify Access
+        run: gcloud projects describe dev-stage-project
