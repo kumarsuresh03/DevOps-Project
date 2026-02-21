@@ -1,4 +1,4 @@
-name: Frontend CI/CD (GCP Manual)
+name: Frontend CI/CD (Manual)
 
 on:
   workflow_dispatch:
@@ -8,53 +8,45 @@ on:
         required: true
         default: "dev"
 
-permissions:
-  id-token: write
-  contents: read
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment }}
 
     env:
-      PROJECT_ID: dev-stage-project
+      AWS_REGION: ap-south-1
+      ACCOUNT_ID: 375864262524
       ENV: ${{ github.event.inputs.environment }}
+      S3_BUCKET: myapp-frontend-${{ github.event.inputs.environment }}-375864262524
 
     steps:
       # 🔹 Checkout Code
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 🔹 Authenticate to GCP using OIDC
-      - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: "projects/393888714848/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
-          service_account: "terraform-sa@dev-stage-project.iam.gserviceaccount.com"
-
-      # 🔹 Setup gcloud
-      - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Set GCP Project
-        run: gcloud config set project $PROJECT_ID
-
-      # 🔹 Select Bucket + API URL Dynamically
+      # 🔹 Select Environment Variables Dynamically
       - name: Set Environment Variables
         run: |
           if [ "${ENV}" = "dev" ]; then
-            echo "BUCKET_NAME=dev-stage-frontend-bucket" >> $GITHUB_ENV
+            echo "DISTRIBUTION_ID=${{ vars.CLOUDFRONT_DEV_ID }}" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_API_URL=${{ vars.FRONTEND_DEV_API_URL }}" >> $GITHUB_ENV
           elif [ "${ENV}" = "stage" ]; then
-            echo "BUCKET_NAME=stage-frontend-bucket" >> $GITHUB_ENV
+            echo "DISTRIBUTION_ID=${{ vars.CLOUDFRONT_STAGE_ID }}" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_API_URL=${{ vars.FRONTEND_STAGE_API_URL }}" >> $GITHUB_ENV
           elif [ "${ENV}" = "prod" ]; then
-            echo "BUCKET_NAME=prod-frontend-bucket" >> $GITHUB_ENV
+            echo "DISTRIBUTION_ID=${{ vars.CLOUDFRONT_PROD_ID }}" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_API_URL=${{ vars.FRONTEND_PROD_API_URL }}" >> $GITHUB_ENV
           fi
 
-      # 🔹 Setup Node
+      # 🔹 Configure AWS Credentials
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 🔹 Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -73,13 +65,14 @@ jobs:
           echo "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL" > .env.production
           npm run build
 
-      # 🔹 Upload to GCS
-      - name: Upload to GCS
+      # 🔹 Upload to S3
+      - name: Upload to S3
         run: |
-          gsutil -m rsync -r frontend/out gs://$BUCKET_NAME
+          aws s3 sync frontend/out/ s3://$S3_BUCKET --delete
 
-      # 🔹 Invalidate Cloud CDN Cache
-      - name: Invalidate Cloud CDN
+      # 🔹 Invalidate CloudFront Cache
+      - name: Invalidate CloudFront Cache
         run: |
-          gcloud compute url-maps invalidate-cdn-cache frontend-url-map \
-            --path "/*"
+          aws cloudfront create-invalidation \
+            --distribution-id $DISTRIBUTION_ID \
+            --paths "/*"
