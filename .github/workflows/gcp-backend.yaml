@@ -57,6 +57,6 @@ jobs:
       # 🔹 Build & Push Image
       - name: Build and Push Image
         run: |
-          IMAGE_URI=$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/my-app:$ENV
-          gcloud builds submit --tag $IMAGE_URI
+          IMAGE_URI=$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/backend-app:$ENV
+          gcloud builds submit ./backend --tag $IMAGE_URI
           echo "Image pushed to: $IMAGE_URI"
