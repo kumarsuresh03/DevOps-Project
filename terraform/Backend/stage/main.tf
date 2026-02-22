@@ -3,7 +3,7 @@
 ################################
 
 variable "environment" {
-  default = "prod"
+  default = "stage"
 }
 
 ################################
@@ -19,7 +19,6 @@ data "aws_vpc" "shared" {
   }
 }
 
-# Public subnets for ALB
 data "aws_subnets" "public" {
   filter {
     name   = "vpc-id"
@@ -32,7 +31,6 @@ data "aws_subnets" "public" {
   }
 }
 
-# ✅ Private subnets for ECS (PROD)
 data "aws_subnets" "private" {
   filter {
     name   = "vpc-id"
@@ -40,8 +38,8 @@ data "aws_subnets" "private" {
   }
 
   filter {
-    name   = "cidr-block"
-    values = ["10.0.4.0/24", "10.0.3.0/24"]
+    name   = "tag:Type"
+    values = ["private"]
   }
 }
 
@@ -162,13 +160,17 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_policy" {
   role       = aws_iam_role.ecs_execution_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
+
+################################
 # TASK DEFINITION
+################################
+
 resource "aws_ecs_task_definition" "task" {
   family                   = "backend-${var.environment}"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = "1024"
-  memory                   = "2048"
+  cpu                      = "512"
+  memory                   = "1024"
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
 
   container_definitions = jsonencode([{
@@ -183,14 +185,16 @@ resource "aws_ecs_task_definition" "task" {
   }])
 }
 
+################################
 # ECS SERVICE
+################################
+
 resource "aws_ecs_service" "service" {
   name            = "backend-${var.environment}-service"
   cluster         = data.aws_ecs_cluster.shared.id
   task_definition = aws_ecs_task_definition.task.arn
-  desired_count   = 3   # ✅ Minimum running tasks
-
-  launch_type = "FARGATE"
+  desired_count   = 1
+  launch_type     = "FARGATE"
 
   network_configuration {
     subnets          = data.aws_subnets.private.ids
@@ -206,16 +210,22 @@ resource "aws_ecs_service" "service" {
 
   depends_on = [aws_lb_listener.http]
 }
+
+################################
 # AUTO SCALING TARGET
+################################
 
 resource "aws_appautoscaling_target" "ecs_target" {
-  max_capacity       = 20
-  min_capacity       = 3
+  max_capacity       = 3
+  min_capacity       = 1
   resource_id        = "service/${data.aws_ecs_cluster.shared.cluster_name}/${aws_ecs_service.service.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
 }
+
+################################
 # AUTO SCALING POLICY (CPU BASED)
+################################
 
 resource "aws_appautoscaling_policy" "ecs_cpu_policy" {
   name               = "ecs-cpu-scaling-${var.environment}"
@@ -231,7 +241,7 @@ resource "aws_appautoscaling_policy" "ecs_cpu_policy" {
       predefined_metric_type = "ECSServiceAverageCPUUtilization"
     }
 
-    scale_in_cooldown  = 120
+    scale_in_cooldown  = 60
     scale_out_cooldown = 60
   }
 }
