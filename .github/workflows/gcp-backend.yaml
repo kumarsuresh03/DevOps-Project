@@ -2,6 +2,11 @@ name: Build Push and Update Cloud Run
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment (dev/stage/prod)"
+        required: true
+        default: "dev"
 
 permissions:
   id-token: write
@@ -54,7 +59,8 @@ jobs:
         run: |
           gcloud run services update $SERVICE_NAME \
             --image $IMAGE_URI \
-            --region $REGION
+            --region $REGION \
+            --platform managed
 
       # 🔹 Show Service URL
       - name: Show Service URL
