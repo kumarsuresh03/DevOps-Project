@@ -38,7 +38,7 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      # 🔹 Configure Docker
+      # 🔹 Configure Docker Authentication
       - name: Configure Docker
         run: |
           gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
@@ -54,9 +54,15 @@ jobs:
             echo "REPO_NAME=prod-repo" >> $GITHUB_ENV
           fi
 
-      # 🔹 Build & Push Image
-      - name: Build and Push Image
+      # 🔹 Build Docker Image
+      - name: Build Docker Image
         run: |
           IMAGE_URI=$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/backend-app:$ENV
-          gcloud builds submit ./backend --tag $IMAGE_URI
-          echo "Image pushed to: $IMAGE_URI"
+          docker build -t $IMAGE_URI ./backend
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+
+      # 🔹 Push Docker Image
+      - name: Push Docker Image
+        run: |
+          docker push $IMAGE_URI
+          echo "Image pushed successfully: $IMAGE_URI"
