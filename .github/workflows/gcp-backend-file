@@ -1,0 +1,62 @@
+name: Build and Push Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment (dev/stage/prod)"
+        required: true
+        default: "dev"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    env:
+      PROJECT_ID: dev-stage-project
+      REGION: asia-south1
+      ENV: ${{ github.event.inputs.environment }}
+
+    steps:
+      # 🔹 Checkout Code
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 🔹 Authenticate to GCP (OIDC)
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: "projects/393888714848/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+          service_account: "terraform-sa@dev-stage-project.iam.gserviceaccount.com"
+
+      # 🔹 Setup gcloud
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      # 🔹 Configure Docker
+      - name: Configure Docker
+        run: |
+          gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+
+      # 🔹 Set Repo Based on ENV
+      - name: Set Repository Name
+        run: |
+          if [[ "$ENV" == "dev" ]]; then
+            echo "REPO_NAME=dev-repo" >> $GITHUB_ENV
+          elif [[ "$ENV" == "stage" ]]; then
+            echo "REPO_NAME=stage-repo" >> $GITHUB_ENV
+          elif [[ "$ENV" == "prod" ]]; then
+            echo "REPO_NAME=prod-repo" >> $GITHUB_ENV
+          fi
+
+      # 🔹 Build & Push Image
+      - name: Build and Push Image
+        run: |
+          IMAGE_URI=$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/my-app:$ENV
+          gcloud builds submit --tag $IMAGE_URI
+          echo "Image pushed to: $IMAGE_URI"
