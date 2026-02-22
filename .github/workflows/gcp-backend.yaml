@@ -1,26 +1,20 @@
-name: Build and Push Image
+name: Build Push and Update Cloud Run
 
 on:
   workflow_dispatch:
-    inputs:
-      environment:
-        description: "Environment (dev/stage/prod)"
-        required: true
-        default: "dev"
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment }}
 
     env:
       PROJECT_ID: dev-stage-project
       REGION: asia-south1
-      ENV: ${{ github.event.inputs.environment }}
+      SERVICE_NAME: dev-backend-app
 
     steps:
       # 🔹 Checkout Code
@@ -41,23 +35,12 @@ jobs:
       # 🔹 Configure Docker Authentication
       - name: Configure Docker
         run: |
-          gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+          gcloud auth configure-docker asia-south1-docker.pkg.dev --quiet
 
-      # 🔹 Set Repo Based on ENV
-      - name: Set Repository Name
-        run: |
-          if [[ "$ENV" == "dev" ]]; then
-            echo "REPO_NAME=dev-repo" >> $GITHUB_ENV
-          elif [[ "$ENV" == "stage" ]]; then
-            echo "REPO_NAME=stage-repo" >> $GITHUB_ENV
-          elif [[ "$ENV" == "prod" ]]; then
-            echo "REPO_NAME=prod-repo" >> $GITHUB_ENV
-          fi
-
-      # 🔹 Build Docker Image
+      # 🔹 Build Docker Image (Unique Tag Every Time)
       - name: Build Docker Image
         run: |
-          IMAGE_URI=$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/backend-app:$ENV
+          IMAGE_URI=asia-south1-docker.pkg.dev/$PROJECT_ID/dev-repo/backend-app:${GITHUB_SHA}
           docker build -t $IMAGE_URI ./backend
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
@@ -65,4 +48,17 @@ jobs:
       - name: Push Docker Image
         run: |
           docker push $IMAGE_URI
-          echo "Image pushed successfully: $IMAGE_URI"
+
+      # 🔹 Update Cloud Run Image Only
+      - name: Update Cloud Run Image
+        run: |
+          gcloud run services update $SERVICE_NAME \
+            --image $IMAGE_URI \
+            --region $REGION
+
+      # 🔹 Show Service URL
+      - name: Show Service URL
+        run: |
+          gcloud run services describe $SERVICE_NAME \
+            --region $REGION \
+            --format='value(status.url)'
